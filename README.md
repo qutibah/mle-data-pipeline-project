@@ -210,10 +210,42 @@ Result: 146,486 rows read → 145,997 kept (489 dropped, 0.33%) → 90 daily row
 
 ## Answers
 
-1. **Steps:** Downloaded the three monthly Parquet files with an idempotent script; explored January to find the
-   date and amount columns and their problems; wrote an ETL pipeline split into extract/transform/load modules;
-   added unit tests for the cleaning and aggregation; wrapped the stages in a Prefect flow with retries.
-2. **Challenges:** Each monthly file contains some trips from other months, so filtering per file would be wrong –
-   the filter must use the whole 3-month window. Deciding what counts as "revenue" (negative amounts are refunds).
-3. **With more time:** Add data-quality checks that fail the run (e.g. expected number of days), try an ELT version
-   with DuckDB + dbt, and schedule the Prefect flow to pick up new months automatically.
+### 1. What are the steps you took to complete the project?
+
+First I wrote a script that downloads the Green Taxi data for January, February and March 2025
+and saves it in `data/raw/`. I made it skip files that are already there, so I can run it again
+without downloading everything again.
+
+Then I opened the January file to understand the data. I found the two columns I need:
+`lpep_pickup_datetime` (when the trip started) and `total_amount` (what the customer paid).
+While checking them I saw some trips from December 2024 and February 2025 inside the January file,
+and some negative amounts.
+
+After that I built the pipeline in three parts: extract (download), transform (clean the data,
+group it by day and add up the revenue) and load (save the result as CSV and Parquet in
+`data/processed/`). I chose ETL because the data is small and fits in memory, so pandas is enough
+and I don't need a database or dbt.
+
+I wrote two tests for the transform with a small fake table, to check that bad rows are removed
+and that the daily sums are correct. In the end I also made a Prefect version where every stage
+is a task, and the download task retries 3 times if it fails.
+
+### 2. What challenges did you face?
+
+- The monthly files are not perfectly separated by month. If I had filtered each file to its own
+  month, I would have lost real trips, for example a trip on January 31 that is saved in the
+  February file. So I filter on the full period from January 1 to March 31 instead.
+- I had to decide what counts as revenue. Negative amounts are refunds or cancelled trips, so I
+  removed them. In total I removed 489 of 146,486 rows (0.33%).
+- I had problems with Git. At first I could not push because I had cloned the course template and
+  I don't have write access to it. My own repository was created from the template, so it had a
+  different history, and I had to move my commit onto my own `main` before I could open a pull request.
+
+### 3. What would you do differently if you had more time?
+
+- Add checks that stop the pipeline when something looks wrong, for example if the result does not
+  have 90 days or if the revenue on one day is suddenly very different.
+- Try an ELT version: load the raw files into DuckDB and do the cleaning in SQL with dbt, then
+  compare it with my pandas version.
+- Look more closely at outliers like very long trips or trips with 0 distance but a high price.
+- Schedule the Prefect flow so it downloads and processes each new month automatically.
