@@ -24,3 +24,13 @@ required-version = ">=0.13.5"
 # Apply certificate fixes without adding unused runtime packages.
 # Prefect's server still uses FastAPI's removed min_items argument.
 constraint-dependencies = ["certifi>=2026.10.19", "pip>=26.2.2", "fastapi<0.155"]
+
+[build-system]
+requires = ["uv_build>=0.13.5,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "taxi_pipeline"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

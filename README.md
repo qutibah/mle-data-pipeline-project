@@ -39,9 +39,9 @@ Bonus task, if you have time:
 - Check them: data types, missing values, value ranges for dates and amounts
 - Note what needs cleaning before you can add up revenue per day
 
-**Step 3: Transform and load** (brief task 2) · Revisit: ETL vs. ELT, dbt
+**Step 3: Transform and load** (brief task 2) · Revisit: ETL vs. ELT, dbt : dbt is a open source software tool used to transfrom raw data directly inside the cloud data warehoue using simple SQL.
 
-- Choose ETL or ELT: transform in Python before loading, or load raw data and transform in SQL
+- Choose ETL or ELT: transform in Python before loading, or load raw data and transform in SQL using dbt 
 - Read the staged files
 - Clean based on what you found in Step 2
 - Group by day and sum the revenue
@@ -169,3 +169,51 @@ See [solution/README.md](solution/README.md) for how to run it and how its files
 1. What are the steps you took to complete the project?
 2. What challenges did you face?
 3. What would you do differently if you had more time?
+
+## My Solution
+
+### How to Run
+
+```bash
+uv sync                                      # install dependencies + this package
+uv run python -m taxi_pipeline.extract       # Step 1: download Jan–Mar 2025 into data/raw/
+uv run python exploration/explore.py         # Step 2: inspect the data (optional)
+uv run python -m taxi_pipeline.pipeline      # Step 3: full ETL -> data/processed/daily_revenue.{parquet,csv}
+uv run pytest                                # tests for the transform
+uv run python -m taxi_pipeline.flow          # Step 4: same pipeline as a Prefect flow
+```
+
+| File | Stage |
+|---|---|
+| `src/taxi_pipeline/config.py` | URLs, months, and folder paths |
+| `src/taxi_pipeline/extract.py` | **E**: download each month, skip files already present |
+| `src/taxi_pipeline/transform.py` | **T**: read, clean, group by day, sum revenue |
+| `src/taxi_pipeline/load.py` | **L**: write Parquet + CSV |
+| `src/taxi_pipeline/pipeline.py` | runs E → T → L and prints row counts |
+| `src/taxi_pipeline/flow.py` | Prefect version with retries on the download |
+
+### ETL or ELT?
+
+This pipeline is **ETL**: the data is transformed in Python (pandas) *before* it is loaded to `data/processed/`.
+The dataset is small (~146k rows), fits in memory, and there is no warehouse, so loading raw data
+somewhere first and transforming with SQL/dbt (ELT) would add tooling without benefit.
+
+### Cleaning Rules (from exploration)
+
+| Issue found | Rule |
+|---|---|
+| Pickups outside the window (e.g. 2024-12-25 in the January file) | keep only 2025-01-01 ≤ pickup < 2025-04-01 |
+| Negative `total_amount` (refunds/voids, min −$114) | drop rows with amount < 0 |
+| Possible missing pickup time or amount | drop those rows |
+
+Result: 146,486 rows read → 145,997 kept (489 dropped, 0.33%) → 90 daily rows, total revenue $3,401,753.17.
+
+## Answers
+
+1. **Steps:** Downloaded the three monthly Parquet files with an idempotent script; explored January to find the
+   date and amount columns and their problems; wrote an ETL pipeline split into extract/transform/load modules;
+   added unit tests for the cleaning and aggregation; wrapped the stages in a Prefect flow with retries.
+2. **Challenges:** Each monthly file contains some trips from other months, so filtering per file would be wrong –
+   the filter must use the whole 3-month window. Deciding what counts as "revenue" (negative amounts are refunds).
+3. **With more time:** Add data-quality checks that fail the run (e.g. expected number of days), try an ELT version
+   with DuckDB + dbt, and schedule the Prefect flow to pick up new months automatically.
