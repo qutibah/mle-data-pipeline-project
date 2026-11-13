@@ -192,6 +192,21 @@ uv run python -m taxi_pipeline.flow          # Step 4: same pipeline as a Prefec
 | `src/taxi_pipeline/pipeline.py` | runs E → T → L and prints row counts |
 | `src/taxi_pipeline/flow.py` | Prefect version with retries on the download |
 
+### Prefect Dashboard
+
+To see the flow runs in the dashboard, start a Prefect server in its own terminal and point the flow at it:
+
+```bash
+uv run prefect server start                                        # dashboard at http://127.0.0.1:4200
+uv run prefect config set PREFECT_API_URL=http://127.0.0.1:4200/api  # one-time setup
+uv run python -m taxi_pipeline.flow
+```
+
+The dashboard shows every run of the pipeline, with its status (Completed, Failed or Retrying),
+start time and duration. Opening a run shows each stage as a separate task (`extract_task` for each
+month, then `transform_task` and `load_task`) with its logs, retries and timing, so it is easy to see
+which step failed or was slow without digging through the code.
+
 ### ETL or ELT?
 
 This pipeline is **ETL**: the data is transformed in Python (pandas) *before* it is loaded to `data/processed/`.
